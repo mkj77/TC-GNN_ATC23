@@ -255,6 +255,92 @@ void preprocess_gpu(torch::Tensor edgeList_tensor,
     printf("TC_Blocks:\t%d\nExp_Edges:\t%d\n", block_counter, block_counter * 8 * 16);
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+// support two input matrices
+/////////////////////////////////////////////////////////////////////////////////////////
+std::vector<torch::Tensor> sddmm_forward_cuda_extend(
+    torch::Tensor nodePointer,
+    torch::Tensor edgeList,			    // edge list.
+	torch::Tensor blockPartition,		// number of TC_blocks (16x8) in each row_window.
+	torch::Tensor edgeToColumn, 		// eid -> col within each row_window.
+	torch::Tensor edgeToRow, 			// eid -> col within each row_window.
+              int num_nodes,
+              int num_edges,
+              int embedding_dim,	    // embedding dimension.
+	torch::Tensor input1,				// input feature matrix1.
+	torch::Tensor input2				// input feature matrix2.
+);
+
+std::vector<torch::Tensor> sddmm_forward_extend(
+  torch::Tensor input1,				
+  torch::Tensor input2,
+  torch::Tensor nodePointer,
+  torch::Tensor edgeList,			    
+	torch::Tensor blockPartition,		
+	torch::Tensor edgeToColumn, 		
+	torch::Tensor edgeToRow
+) {
+  CHECK_INPUT(input1);
+  CHECK_INPUT(input2);
+  CHECK_INPUT(nodePointer);
+  CHECK_INPUT(edgeList);
+  CHECK_INPUT(blockPartition);
+  CHECK_INPUT(edgeToColumn);
+  CHECK_INPUT(edgeToRow);
+
+  int num_nodes = nodePointer.size(0) - 1;
+  int num_edges = edgeList.size(0);
+  int embedding_dim = input1.size(1);
+
+//   printf("at sddmm_forward\n");
+  return sddmm_forward_cuda_extend(nodePointer, edgeList, 
+                            blockPartition, edgeToColumn, edgeToRow, 
+                            num_nodes, num_edges, embedding_dim,
+                            input1, input2);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// support input sparse matrix sp_input
+/////////////////////////////////////////////////////////////////////////////////////////
+std::vector<torch::Tensor> spmm_forward_cuda_extend(
+    torch::Tensor nodePointer,
+    torch::Tensor edgeList,
+    torch::Tensor blockPartition, 
+    torch::Tensor edgeToColumn,
+    torch::Tensor edgeToRow,
+              int num_nodes,
+              int num_edges,
+              int embedding_dim,
+    torch::Tensor input,
+    torch::Tensor sp_input
+);
+
+std::vector<torch::Tensor> spmm_forward_extend(
+    torch::Tensor input,
+    torch::Tensor sp_input,
+    torch::Tensor nodePointer,
+    torch::Tensor edgeList,
+    torch::Tensor blockPartition, 
+    torch::Tensor edgeToColumn,
+    torch::Tensor edgeToRow
+) {
+  CHECK_INPUT(input);
+  CHECK_INPUT(nodePointer);
+  CHECK_INPUT(edgeList);
+  CHECK_INPUT(blockPartition);
+  CHECK_INPUT(edgeToColumn);
+  CHECK_INPUT(edgeToRow);
+
+  int num_nodes = nodePointer.size(0) - 1;
+  int num_edges = edgeList.size(0);
+  int embedding_dim = input.size(1);
+
+  return spmm_forward_cuda_extend(nodePointer, edgeList, 
+                            blockPartition, edgeToColumn, edgeToRow, 
+                            num_nodes, num_edges, embedding_dim,
+                            input, sp_input);
+}
+
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
@@ -269,4 +355,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   // backward
   m.def("backward", &spmm_forward, "TC-GNN SPMM backward (CUDA)");
   m.def("backward_ef", &sddmm_forward, "TC-GNN SDDMM backward_ef (CUDA)");
+
+  m.def("sddmm_extend", &sddmm_forward_extend, "TC-GNN SDDMM forward (CUDA) with two inputs");
+  m.def("spmm_extend", &spmm_forward_extend, "TC-GNN SpMM forward (CUDA) with sparse input");
 }
